@@ -20,14 +20,19 @@ var albums = []album{
 }
 
 func main() {
+	router := getRouter()
+
+	router.Run("localhost:8080")
+}
+
+func getRouter() *gin.Engine {
 	router := gin.Default()
 	router.GET("/albums", getAlbums)
 	router.POST("/albums", postAlbum)
 	router.GET("/albums/:id", getAlbumByID)
 	router.DELETE("/albums/:id", deleteAlbumByID)
 	router.PUT("/albums/:id", updateAlbumByID)
-
-	router.Run("localhost:8080")
+	return router
 }
 
 func getAlbums(c *gin.Context) {
@@ -38,7 +43,7 @@ func postAlbum(c *gin.Context) {
 	var newAlbum album
 	if err := c.BindJSON(&newAlbum); err != nil {
 		c.IndentedJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return 
+		return
 	}
 
 	albums = append(albums, newAlbum)
@@ -49,7 +54,7 @@ func getAlbumByID(c *gin.Context) {
 	id := c.Param("id")
 
 	for _, a := range albums {
-	  if a.ID == id {
+		if a.ID == id {
 			c.IndentedJSON(http.StatusOK, a)
 			return
 		}
