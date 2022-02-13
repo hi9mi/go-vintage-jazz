@@ -76,17 +76,15 @@ func deleteAlbumByID(c *gin.Context) {
 }
 
 func updateAlbumByID(c *gin.Context) {
-	var updatedAlbum album
 	id := c.Param("id")
 
-	for i, a := range albums {
+	for _, a := range albums {
 		if a.ID == id {
-			if err := c.BindJSON(&updatedAlbum); err != nil {
+			if err := c.BindJSON(&a); err != nil {
 				c.IndentedJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 				return
 			}
-			albums[i] = updatedAlbum
-			c.IndentedJSON(http.StatusOK, updatedAlbum)
+			c.IndentedJSON(http.StatusOK, a)
 			return
 		}
 	}
