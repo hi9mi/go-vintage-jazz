@@ -1,0 +1,1 @@
+Simple application, made following the [example of the tutorial](https://go.dev/doc/tutorial/web-service-gin) and slightly modified 
