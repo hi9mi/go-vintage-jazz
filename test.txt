@@ -8,7 +8,7 @@ curl http://localhost:8080/albums \
     --include \
     --header "Content-Type: application/json" \
     --request "POST" \
-    --data '{"title": "The Modern Sound of Betty Carter","artist": "Betty Carter","price": 49}'
+    --data '{"title": "asdr","artist": "Betty Carter","price": 49}'
 
 ###
 curl http://localhost:8080/albums \
@@ -18,19 +18,19 @@ curl http://localhost:8080/albums \
     --data '{"id": "4", title: "The Modern Sound of Betty Carter","artist": "Betty Carter","price": 49.99}'
 
 ### 
-curl http://localhost:8080/albums/14 \
+curl http://localhost:8080/albums/9 \
   --header "Content-Type: application/json" \
   --request "GET" 
 
 ###
-curl http://localhost:8080/albums/2 \
+curl http://localhost:8080/albums/10 \
   --include \
   --header "Content-Type: application/json" \
   --request "DELETE"
 
 ###
-curl http://localhost:8080/albums/1 \
+curl http://localhost:8080/albums/5 \
     --include \
     --header "Content-Type: application/json" \
     --request "PUT" \
-    --data '{ "title": "UPDATED: The Modern Sound of Betty Carter" }'
+    --data '{ "title": "pokemon" }'

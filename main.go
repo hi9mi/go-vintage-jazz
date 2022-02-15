@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 
 	"database/sql"
 
@@ -16,7 +17,7 @@ import (
 )
 
 type Records interface {
-	Create(PostRecordInput) (Record, error)
+	Create(PostRecordInput) (string, error)
 	Read() ([]Record, error)
 	ReadOne(string) (Record, error)
 	Update(string, UpdateRecordInput) (Record, error)
@@ -131,25 +132,18 @@ func NewPostgresDB(cfg DBConfig) (*sql.DB, error) {
 	return db, nil
 }
 
-func (r *Repository) Create(a PostRecordInput) (Record, error) {
-	qry := "INSERT INTO records (title, artist, price) VALUES ($1, $2, $3) RETURNING *"
-	row, err := r.db.Query(qry, a.Title, a.Artist, a.Price)
+func (r *Repository) Create(rcrd PostRecordInput) (string, error) {
+	var id string
+	qry := "INSERT INTO records (title, artist, price) VALUES ($1, $2, $3) RETURNING id"
+	row := r.db.QueryRow(qry, rcrd.Title, rcrd.Artist, rcrd.Price)
+	err := row.Scan(&id)
 	if err != nil {
-		return Record{}, err
+		return "", fmt.Errorf("failed to get last insert id: %s", err.Error())
 	}
-	defer row.Close()
-	var id, title, artist string
-	var price int
-	for row.Next() {
-		if err := row.Scan(&id, &title, &artist, &price); err != nil {
-			return Record{}, err
-		}
-	}
-	return Record{ID: id, Title: title, Artist: artist, Price: price}, nil
+	return id, nil
 }
 
 func (r *Repository) Read() ([]Record, error) {
-	fmt.Printf("Db value: %v", r.db)
 	qry := "SELECT * FROM records"
 	rows, err := r.db.Query(qry)
 	var records []Record
@@ -170,46 +164,49 @@ func (r *Repository) Read() ([]Record, error) {
 }
 
 func (r *Repository) ReadOne(id string) (Record, error) {
+	var rcrd Record
 	qry := "SELECT * FROM records WHERE id = $1"
-	row, err := r.db.Query(qry, id)
-	if err != nil {
-		return Record{}, err
-	}
-	defer row.Close()
-	var title, artist string
-	var price int
-	for row.Next() {
-		if err := row.Scan(&id, &title, &artist, &price); err != nil {
-			return Record{}, err
+	row := r.db.QueryRow(qry, id)
+	if err := row.Scan(&rcrd.ID, &rcrd.Title, &rcrd.Artist, &rcrd.Price); err != nil {
+		if err == sql.ErrNoRows {
+			return rcrd, fmt.Errorf("record with id %s not found", id)
 		}
+		return rcrd, fmt.Errorf("failed to get record with id %s: %s", id, err.Error())
 	}
-	return Record{ID: id, Title: title, Artist: artist, Price: price}, nil
+	return rcrd, nil
 }
 
 func (r *Repository) Update(id string, newRecord UpdateRecordInput) (Record, error) {
-	qry := "UPDATE records SET title = $1, artist = $2, price = $3 WHERE id = $4 RETURNING *"
-	row, err := r.db.Query(qry, newRecord.Title, newRecord.Artist, newRecord.Price, id)
-	if err != nil {
-		return Record{}, err
+	var rcrd Record
+	setValues := make([]string, 0)
+	if newRecord.Title != "" {
+		setValues = append(setValues, fmt.Sprintf("title = '%s'", newRecord.Title))
 	}
-	defer row.Close()
-	var title, artist string
-	var price int
-	for row.Next() {
-		if err := row.Scan(&id, &title, &artist, &price); err != nil {
-			return Record{}, err
+	if newRecord.Artist != "" {
+		setValues = append(setValues, fmt.Sprintf("artist = '%s'", newRecord.Artist))
+	}
+	if newRecord.Price != 0 {
+		setValues = append(setValues, fmt.Sprintf("price = %d", newRecord.Price))
+	}
+	setQuery := strings.Join(setValues, ", ")
+	qry := fmt.Sprintf("UPDATE records SET %s WHERE id = %s RETURNING *", setQuery, id)
+	row := r.db.QueryRow(qry)
+	if err := row.Scan(&rcrd.ID, &rcrd.Title, &rcrd.Artist, &rcrd.Price); err != nil {
+		if err == sql.ErrNoRows {
+			return rcrd, fmt.Errorf("record with id %s not found", id)
 		}
+		return rcrd, fmt.Errorf("failed to get record with id %s: %s", id, err.Error())
 	}
-	return Record{ID: id, Title: title, Artist: artist, Price: price}, nil
+	return rcrd, nil
 }
 
 func (r *Repository) Delete(id string) (string, error) {
-	qry := "DELETE FROM records WHERE id = $1"
-	_, err := r.db.Query(qry, id)
-	if err != nil {
-		return "", err
+	qry := "DELETE FROM records WHERE id = $1 RETURNING id"
+	row := r.db.QueryRow(qry, id)
+	if err := row.Scan(&id); err == sql.ErrNoRows {
+		return "", fmt.Errorf("record with id %s not found", id)
 	}
-	return "record successfully deleted", nil
+	return id, nil
 }
 
 func (h *Handler) getRecords(c *gin.Context) {
@@ -232,7 +229,7 @@ func (h *Handler) postRecord(c *gin.Context) {
 		c.IndentedJSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	c.IndentedJSON(http.StatusCreated, r)
+	c.IndentedJSON(http.StatusCreated, gin.H{"id": r})
 }
 
 func (h *Handler) getRecordByID(c *gin.Context) {
@@ -252,12 +249,12 @@ func (h *Handler) deleteRecordByID(c *gin.Context) {
 		c.IndentedJSON(http.StatusNotFound, gin.H{"message": err.Error()})
 		return
 	}
-	c.IndentedJSON(http.StatusOK, gin.H{"message": r})
+	c.IndentedJSON(http.StatusOK, gin.H{"id": r})
 }
 
 func (h *Handler) updateRecordByID(c *gin.Context) {
-	id := c.Param("id")
 	var inputRecord UpdateRecordInput
+	id := c.Param("id")
 	if err := c.BindJSON(&inputRecord); err != nil {
 		c.IndentedJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
