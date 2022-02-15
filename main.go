@@ -1,12 +1,16 @@
 package main
 
 import (
-	"errors"
 	"fmt"
+	"log"
 	"net/http"
+	"os"
 
 	"database/sql"
+
 	"github.com/gin-gonic/gin"
+	"github.com/joho/godotenv"
+	"github.com/spf13/viper"
 
 	_ "github.com/lib/pq"
 )
@@ -64,17 +68,36 @@ type DBConfig struct {
 }
 
 func main() {
-	db, err := NewPostgresDB(DBConfig{Host: "localhost", Port: "5436", Username: "postgres", Password: "docker", DBName: "postgres", SSLMode: "disable"})
+	if err := InitConfig(); err != nil {
+		log.Fatalf("Failed to read config: %s", err.Error())
+	}
+	if err := godotenv.Load(); err != nil {
+		log.Fatalf("Failed to load .env file: %s", err.Error())
+	}
+	db, err := NewPostgresDB(DBConfig{
+		Host:     viper.GetString("db.host"),
+		Port:     viper.GetString("db.port"),
+		Username: viper.GetString("db.username"),
+		Password: os.Getenv("DB_PASSWORD"),
+		DBName:   viper.GetString("db.dbname"),
+		SSLMode:  viper.GetString("db.sslmode")})
 	if err != nil {
-		fmt.Printf("Failed to initialize db: %s", err.Error())
+		log.Fatalf("Failed to initialize db: %s", err.Error())
 	} else {
+		defer db.Close()
 		repo := NewRepository(db)
 		handler := NewHandler(repo)
-		defer db.Close()
 		fmt.Println("Successfully connected to db!!!")
 		r := handler.initRoutes()
-		r.Run("localhost:8080")
+		r.Run(fmt.Sprintf("localhost:%s", viper.GetString("port")))
 	}
+}
+
+func InitConfig() error {
+	viper.AddConfigPath(".")
+	viper.SetConfigName("config")
+	viper.SetConfigType("yaml")
+	return viper.ReadInConfig()
 }
 
 func NewHandler(repo *Repository) *Handler {
@@ -143,7 +166,6 @@ func (r *Repository) Read() ([]Record, error) {
 		record := Record{ID: id, Title: title, Artist: artist, Price: price}
 		records = append(records, record)
 	}
-	rows.Columns()
 	return records, nil
 }
 
@@ -151,7 +173,7 @@ func (r *Repository) ReadOne(id string) (Record, error) {
 	qry := "SELECT * FROM records WHERE id = $1"
 	row, err := r.db.Query(qry, id)
 	if err != nil {
-		return Record{}, errors.New("record not found")
+		return Record{}, err
 	}
 	defer row.Close()
 	var title, artist string

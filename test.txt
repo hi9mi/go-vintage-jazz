@@ -18,8 +18,7 @@ curl http://localhost:8080/albums \
     --data '{"id": "4", title: "The Modern Sound of Betty Carter","artist": "Betty Carter","price": 49.99}'
 
 ### 
-curl http://localhost:8080/albums/3 \
-  --include \
+curl http://localhost:8080/albums/14 \
   --header "Content-Type: application/json" \
   --request "GET" 
 
